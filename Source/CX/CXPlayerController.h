@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "Subsystem/ChatSubsystem.h"
 #include "CXPlayerController.generated.h"
 
 class UInputMappingContext;
@@ -21,12 +22,17 @@ class CX_API ACXPlayerController : public APlayerController
 
 protected:
 	friend class UChatUI;
+	friend class ACXGameMode;
+
+	UFUNCTION(Server, Reliable)
+	void STCChatLog(const TArray<FChatData>& ChatLog);
 
 	UFUNCTION(Server, Reliable)
 	void CTSChatMessage(const FString& Message);
 
 	UFUNCTION(Client, Reliable)
 	void STCChatMessage(const FString& Sender, const FString& Message);
+
 protected:
 
 	/** Input Mapping Context to be used for player input */

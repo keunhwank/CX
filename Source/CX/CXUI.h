@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "UI/ChatUI.h"
 #include "CXUI.generated.h"
 
 /**
@@ -16,6 +17,14 @@ class CX_API UCXUI : public UUserWidget
 {
 	GENERATED_BODY()
 	
+
+public:
+	void OnNewChatMessage(const FString& InSender, const FString& InMessage);
+
+protected:
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UChatUI> UI_Chat;
+
 protected:
 
 	/** Controls the display of speed in Km/h or MPH */
@@ -39,4 +48,5 @@ protected:
 	/** Implemented in Blueprint to display the new gear */
 	UFUNCTION(BlueprintImplementableEvent, Category = Vehicle)
 	void OnGearUpdate(int32 NewGear);
+
 };

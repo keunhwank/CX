@@ -18,9 +18,9 @@ class CX_API UChatUI : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	void OnNewChatMessage(const FString&, const FString& Message);
+	void OnNewChatMessage(const FString& InSender, const FString& InMessage);
 
-public:
+protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 
