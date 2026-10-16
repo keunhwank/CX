@@ -5,10 +5,35 @@
 #include "EngineUtils.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerStart.h"
+#include "Subsystem/ChatSubsystem.h"
+#include "PlayerState/CXPlayerState.h"
 
 ACXGameMode::ACXGameMode()
 {
 	PlayerControllerClass = ACXPlayerController::StaticClass();
+	PlayerStateClass = ACXPlayerState::StaticClass();
+}
+
+void ACXGameMode::PostLogin(APlayerController* NewPlayer)
+{
+	Super::PostLogin(NewPlayer);
+	if (IsValid(NewPlayer) == false)
+	{
+		return;
+	}
+
+	if (ACXPlayerController* CXPlayerController = Cast<ACXPlayerController>(NewPlayer))
+	{
+		// 서버 시점에 클라로 채팅 로그를 보내줌
+		if (UChatSubsystem* ChatSubsystem = GetWorld()->GetSubsystem<UChatSubsystem>())
+		{
+			const TArray<FChatData> ChatLog = ChatSubsystem->GetChatLog();
+			if (!ChatLog.IsEmpty())
+			{
+				CXPlayerController->STCChatLog(ChatLog);
+			}
+		}
+	}
 }
 
 AActor* ACXGameMode::ChoosePlayerStart_Implementation(AController* Player)

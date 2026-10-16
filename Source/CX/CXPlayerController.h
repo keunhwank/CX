@@ -24,7 +24,7 @@ protected:
 	friend class UChatUI;
 	friend class ACXGameMode;
 
-	UFUNCTION(Server, Reliable)
+	UFUNCTION(Client, Reliable)
 	void STCChatLog(const TArray<FChatData>& ChatLog);
 
 	UFUNCTION(Server, Reliable)

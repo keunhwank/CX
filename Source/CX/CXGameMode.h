@@ -17,6 +17,9 @@ public:
 protected:
 	virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
 
+	/** Called after a successful login.  This is the first place it is safe to call replicated functions on the PlayerController. */
+	virtual void PostLogin(APlayerController* NewPlayer);
+
 private:
 	bool IsPlayerStartAvailable(const APlayerStart* PlayerStart) const;
 
