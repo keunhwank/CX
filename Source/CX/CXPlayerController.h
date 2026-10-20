@@ -33,6 +33,13 @@ protected:
 	UFUNCTION(Client, Reliable)
 	void STCChatMessage(const FString& Sender, const FString& Message);
 
+public:
+	UFUNCTION(Server, Reliable)
+	void CTSSetReady(bool bNewReady);
+
+	void ShowMouseForUI();
+	void HideMouseForUI();
+
 protected:
 
 	/** Input Mapping Context to be used for player input */

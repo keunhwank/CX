@@ -10,6 +10,11 @@
 #include "GameFramework/PlayerState.h"
 #include "EngineUtils.h"
 #include "Subsystem/ChatSubsystem.h"
+#include "GameState/CXGameStateBase.h"
+#include "PlayerState/CXPlayerState.h"
+#include "CXGameMode.h"
+#include "Components/InputComponent.h"
+#include "InputCoreTypes.h"
 
 void ACXPlayerController::STCChatLog_Implementation(const TArray<FChatData>& ChatLog)
 {
@@ -46,6 +51,59 @@ void ACXPlayerController::STCChatMessage_Implementation(const FString& Sender, c
 }
 
 
+void ACXPlayerController::CTSSetReady_Implementation(bool bNewReady)
+{
+	ACXPlayerState* CXPlayerState = GetPlayerState<ACXPlayerState>();
+	ACXGameMode* CXGameMode = GetWorld()->GetAuthGameMode<ACXGameMode>();
+
+	if (!IsValid(CXPlayerState) || !IsValid(CXGameMode))
+	{
+		return;
+	}
+
+	if (!CXGameMode->CanChangeReady())
+	{
+		return;
+	}
+
+	CXPlayerState->bReady = bNewReady;
+
+	UE_LOG(LogTemp, Warning, TEXT("%s Ready: %s"),*CXPlayerState->GetPlayerName(),bNewReady ? TEXT("true") : TEXT("false"));
+
+	//모두 준비 검사
+	CXGameMode->TryStartGame();
+	
+}
+
+void ACXPlayerController::ShowMouseForUI()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	bShowMouseCursor = true;
+
+	FInputModeGameAndUI InputMode;
+	InputMode.SetHideCursorDuringCapture(false);
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+
+	SetInputMode(InputMode);
+}
+
+void ACXPlayerController::HideMouseForUI()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	bShowMouseCursor = false;
+
+	FInputModeGameOnly InputMode;
+	SetInputMode(InputMode);
+}
+
 void ACXPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
@@ -72,12 +130,21 @@ void ACXPlayerController::BeginPlay()
 		}
 
 		ChatSubsystem->ClearChatLog();
+		HideMouseForUI();
 	}
 }
 
 void ACXPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
+	
+	InputComponent->BindKey(
+		EKeys::Tab, IE_Pressed,
+		this, &ThisClass::ShowMouseForUI);
+
+	InputComponent->BindKey(
+		EKeys::Tab, IE_Released,
+		this, &ThisClass::HideMouseForUI);
 	
 	// get the enhanced input subsystem
 	if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
@@ -108,6 +175,13 @@ void ACXPlayerController::Tick(float Delta)
 	{
 		VehicleUI->UpdateSpeed(VehiclePawn->GetChaosVehicleMovement()->GetForwardSpeed());
 		VehicleUI->UpdateGear(VehiclePawn->GetChaosVehicleMovement()->GetCurrentGear());
+	}
+	if (IsLocalController() && IsValid(VehicleUI))
+	{
+		if (const ACXGameStateBase* CXGameState = GetWorld()->GetGameState<ACXGameStateBase>())
+		{
+			VehicleUI->UpdateReminingTime(CXGameState->GetRemainingTime());
+		}
 	}
 }
 

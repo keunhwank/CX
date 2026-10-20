@@ -7,6 +7,7 @@
 #include "GameFramework/PlayerStart.h"
 #include "Subsystem/ChatSubsystem.h"
 #include "PlayerState/CXPlayerState.h"
+#include "GameState/CXGameStateBase.h"
 
 ACXGameMode::ACXGameMode()
 {
@@ -14,9 +15,95 @@ ACXGameMode::ACXGameMode()
 	PlayerStateClass = ACXPlayerState::StaticClass();
 }
 
+void ACXGameMode::BeginPlay()
+{
+	Super::BeginPlay();
+
+	ACXGameStateBase* CXGameState = GetGameState<ACXGameStateBase>();
+	if (IsValid(CXGameState))
+	{
+		CXGameState->SetGameState(EGameState::Wating);
+		CXGameState->SetRemainingTime(5);
+	}
+
+}
+
+void ACXGameMode::StartWaitngCountdown()
+{
+	ACXGameStateBase* CXGameState = GetGameState<ACXGameStateBase>();
+	CXGameState->SetGameState(EGameState::Wating);
+	CXGameState->SetRemainingTime(5);
+	GetWorldTimerManager().SetTimer(GameTimerHandle, this, &ACXGameMode::HandleWaitingTimerTick, 1.f, true);
+	UE_LOG(LogTemp, Warning, TEXT("Waitng Start"));
+}
+
+void ACXGameMode::HandleWaitingTimerTick()
+{
+	ACXGameStateBase* CXGameState = GetGameState<ACXGameStateBase>();
+	const int32 NewRemainingTime = CXGameState->GetRemainingTime() - 1;
+	CXGameState->SetRemainingTime(NewRemainingTime);
+
+	if (NewRemainingTime <= 0)
+	{
+		GetWorldTimerManager().ClearTimer(GameTimerHandle);
+		StartPlayingState();
+	}
+}
+
+void ACXGameMode::StartPlayingState()
+{
+	ACXGameStateBase* CXGameState = GetGameState<ACXGameStateBase>();
+	CXGameState->SetGameState(EGameState::Playing);
+	CXGameState->SetRemainingTime(30);
+	GetWorldTimerManager().SetTimer(GameTimerHandle, this, &ACXGameMode::HandlePlayningTimerTick, 1.f, true);
+}
+
+void ACXGameMode::HandlePlayningTimerTick()
+{
+	ACXGameStateBase* CXGameState = GetGameState<ACXGameStateBase>();
+	const int32 NewRemainingTime = CXGameState->GetRemainingTime() - 1;
+	CXGameState->SetRemainingTime(NewRemainingTime);
+
+	if (NewRemainingTime <= 0)
+	{
+		GetWorldTimerManager().ClearTimer(GameTimerHandle);
+		FinishGame();
+	}
+}
+
+void ACXGameMode::FinishGame()
+{
+	ACXGameStateBase* CXGameState = GetGameState<ACXGameStateBase>();
+
+	int32 HighestCoins = -1;
+	TArray<ACXPlayerState*>Winners;
+
+	for (APlayerState* PlayerState : CXGameState->PlayerArray)
+	{
+		if (ACXPlayerState* CXPlayerState = Cast<ACXPlayerState>(PlayerState))
+		{
+			const int32 PlayerCoins = CXPlayerState->GetCoins();
+			if (HighestCoins < PlayerCoins)
+			{
+				HighestCoins = PlayerCoins;
+				Winners.Empty();
+				Winners.Add(CXPlayerState);
+			}
+			else if (HighestCoins == PlayerCoins)
+			{
+				Winners.Add(CXPlayerState);
+			}
+		}
+	}
+	CXGameState->Winners = Winners;
+	CXGameState->SetRemainingTime(0);
+	CXGameState->SetGameState(EGameState::Finished);
+}
+
 void ACXGameMode::PostLogin(APlayerController* NewPlayer)
 {
 	Super::PostLogin(NewPlayer);
+
 	if (IsValid(NewPlayer) == false)
 	{
 		return;
@@ -82,4 +169,44 @@ bool ACXGameMode::IsPlayerStartAvailable(const APlayerStart* PlayerStart) const
 		);
 
 	return !bVehicleExists;
+}
+
+bool ACXGameMode::CanChangeReady() const
+{
+	const ACXGameStateBase* CXGameState = GetGameState<ACXGameStateBase>();
+
+	if (IsValid(CXGameState) && CXGameState->GetCurrentGameState() == EGameState::Wating && !bWaingCountdownStarted)
+	{
+		return true;
+	}
+	return false;
+}
+
+void ACXGameMode::TryStartGame()
+{
+	if (!CanChangeReady())
+	{
+		return;
+	}
+
+	ACXGameStateBase* CXGameState = GetGameState<ACXGameStateBase>();
+
+	if (CXGameState->PlayerArray.Num() != 2)
+	{
+		return;
+	}
+
+	for (APlayerState* PS : CXGameState->PlayerArray)
+	{
+		const ACXPlayerState* CXPlayerState = Cast<ACXPlayerState>(PS);
+		if (!IsValid(CXPlayerState) || !CXPlayerState->bReady || !IsValid(CXPlayerState->GetPawn()))
+		{
+			return;
+		}
+	}
+	bWaingCountdownStarted = true;
+
+	// 초기 위치 복귀 연결
+
+	StartWaitngCountdown();
 }

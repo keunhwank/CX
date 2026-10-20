@@ -54,6 +54,7 @@ void ACXPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 
   DOREPLIFETIME_CONDITION(ThisClass, Coins, COND_OwnerOnly);
   DOREPLIFETIME_CONDITION(ThisClass, BonusMaxSpeed, COND_OwnerOnly);
+  DOREPLIFETIME(ThisClass, bReady);
 }
 
 void ACXPlayerState::AddCoins(int32 Amount)

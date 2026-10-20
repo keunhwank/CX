@@ -26,6 +26,9 @@ public:
 	void AddCoins(int32 Amount);
 	bool TryRemoveCoins(int32 Amount);
 
+	UPROPERTY(Replicated)
+	bool bReady = false;
+
 	void AddBonusMaxSpeed(float Amount);
 
 	UFUNCTION(BlueprintCallable)

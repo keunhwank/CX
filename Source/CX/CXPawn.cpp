@@ -137,6 +137,8 @@ float ACXPawn::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, A
 		UE_LOG(LogTemplateVehicle, Warning, TEXT("%s Has no coins to transfer $s"),
 			*GetNameSafe(VictimPlayerState), *GetNameSafe(AttackerPlayerState));
 	}
+	
+	
 	return ActualDamage;
 }
 
@@ -242,6 +244,19 @@ void ACXPawn::InputAttack(const FInputActionValue& Value)
 	CTSAttack();
 }
 
+void ACXPawn::MulticastHitEffect_Implementation(const FVector& TraceStart, const FVector& TraceEnd, bool bHitVehicle, const FVector& ImpactPoint, const FVector& ImpactNormal)
+{
+	UWorld* World = GetWorld();
+	DrawDebugLine(World, TraceStart, TraceEnd, FColor::Red, false, 1.0f, 0, 3.0f);
+
+	if (!bHitVehicle)
+	{
+		return;
+	}
+
+	UGameplayStatics::SpawnEmitterAtLocation(World, HitParticle, ImpactPoint, ImpactNormal.Rotation());
+}
+
 void ACXPawn::CTSAttack_Implementation()
 {
 	const FVector Start = GetActorLocation();
@@ -252,16 +267,20 @@ void ACXPawn::CTSAttack_Implementation()
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(this);
 
-	if (FHitResult HitResult; World->LineTraceSingleByChannel(HitResult, Start, End, ECollisionChannel::ECC_Visibility, Params))
+	bool bHitVehicle = false;
+	FHitResult HitResult;
+	if (World->LineTraceSingleByChannel(HitResult, Start, End, ECollisionChannel::ECC_Visibility, Params))
 	{
 		AActor* Actor = HitResult.GetActor();
 		UE_LOG(LogTemplateVehicle, Error, TEXT("Attack trace hit: %s"), *GetNameSafe(HitResult.GetActor()));
 
 		if (ACXPawn* CXPawn = Cast<ACXPawn>(Actor))
 		{
+			bHitVehicle = true;
 			UGameplayStatics::ApplyDamage(CXPawn, 1.0f, GetController(), this, nullptr);
 		}
 	}
+	MulticastHitEffect(Start, End, bHitVehicle, HitResult.ImpactPoint, HitResult.ImpactNormal);
 }
 
 #undef LOCTEXT_NAMESPACE

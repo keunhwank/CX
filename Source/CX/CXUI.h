@@ -7,11 +7,10 @@
 #include "UI/ChatUI.h"
 #include "CXUI.generated.h"
 
-/**
- *  Simple Vehicle HUD class
- *  Displays the current speed and gear.
- *  Widget setup is handled in a Blueprint subclass.
- */
+class UTextBlock;
+class UButton;
+
+
 UCLASS(abstract)
 class CX_API UCXUI : public UUserWidget
 {
@@ -39,7 +38,19 @@ public:
 	/** Called to update the gear display */
 	void UpdateGear(int32 NewGear);
 
+	void UpdateReminingTime(int32 RemainingTime);
+
 protected:
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> Text_RemainingTime;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> Button_Ready;
+
+	virtual void NativeConstruct() override;
+
+	UFUNCTION()
+	void OnReadyClicked();
 
 	/** Implemented in Blueprint to display the new speed */
 	UFUNCTION(BlueprintImplementableEvent, Category = Vehicle)
