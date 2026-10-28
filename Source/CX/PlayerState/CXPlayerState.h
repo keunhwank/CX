@@ -29,7 +29,21 @@ public:
 	UPROPERTY(Replicated)
 	bool bReady = false;
 
+	//플레이어가 재경기를 요청 결과 기록
+	UPROPERTY(Replicated)
+	bool bReplayRequested = false;
+
 	void AddBonusMaxSpeed(float Amount);
+
+	//보유한 코인 0으로 초기화
+	void ResetCoins();
+
+	//보유한 MaxSpeed 0으로 초기화
+	void ResetBonusMaxSpeed();
+
+	//플레이어가 닉네임을 입력 완료했는지 표시
+	UPROPERTY(Replicated)
+	bool bNicknameConfirmed = false;
 
 	UFUNCTION(BlueprintCallable)
 	FString GetPlayerStateInfo() const;

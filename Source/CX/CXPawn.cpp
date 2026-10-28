@@ -12,6 +12,8 @@
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "Kismet/GamePlayStatics.h"
 #include "PlayerState/CXPlayerState.h"
+#include "Net/UnrealNetwork.h"
+
 
 #define LOCTEXT_NAMESPACE "VehiclePawn"
 
@@ -128,13 +130,13 @@ float ACXPawn::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, A
 	const int32 TransferCoinAmount = (int32)ActualDamage;
 	if (VictimPlayerState->TryRemoveCoins((int32)ActualDamage))
 	{
-		UE_LOG(LogTemplateVehicle, Warning, TEXT("%s transferred %d coins to $s"), 
+		UE_LOG(LogTemplateVehicle, Warning, TEXT("%s transferred %d coins to %s"), 
 			*GetNameSafe(VictimPlayerState), TransferCoinAmount, *GetNameSafe(AttackerPlayerState));
 		AttackerPlayerState->AddCoins(TransferCoinAmount);
 	}
 	else
 	{
-		UE_LOG(LogTemplateVehicle, Warning, TEXT("%s Has no coins to transfer $s"),
+		UE_LOG(LogTemplateVehicle, Warning, TEXT("%s Has no coins to transfer %s"),
 			*GetNameSafe(VictimPlayerState), *GetNameSafe(AttackerPlayerState));
 	}
 	
@@ -142,8 +144,135 @@ float ACXPawn::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, A
 	return ActualDamage;
 }
 
+void ACXPawn::ReturnToInitialPosition()
+{
+	//클라이언트가 임의로 위치를 변경하지 않도록 제한
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	//현재 가속, 조항, 브레이크, 입력을 초기화
+	if (IsValid(ChaosVehicleMovement))
+	{
+		ChaosVehicleMovement->SetThrottleInput(0.f);
+		ChaosVehicleMovement->SetSteeringInput(0.f);
+		ChaosVehicleMovement->SetBrakeInput(0.f);
+		ChaosVehicleMovement->SetHandbrakeInput(false);
+	}
+
+	ACXPlayerState* PS = GetPlayerState<ACXPlayerState>();
+	if (IsValid(PS))
+	{
+		//코인 또는 보너스 스피드를 보유하고 있으면 0으로 초기화
+		if (PS->GetCoins() > 0 || PS->GetBounsMaxSpeed() > 0)
+		{
+			PS->ResetCoins();
+
+			UE_LOG(LogTemp, Warning, TEXT("%s Coins Reset: %d"),
+				*PS->GetPlayerName(),
+				PS->GetCoins());
+
+			PS->ResetBonusMaxSpeed();
+
+			UE_LOG(LogTemp, Warning, TEXT("%s BonusMaxSpeed Reset: %.2f"),
+				*PS->GetPlayerName(),
+				PS->GetBounsMaxSpeed());
+		}
+	}
+
+	//저장한 위치로 이동
+	SetActorTransform(
+		InitialTransform,
+		false,
+		nullptr,
+		ETeleportType::TeleportPhysics
+	);
+
+	if (IsValid(GetMesh()))
+	{
+		//이동전 주행 속도 제거
+		GetMesh()->SetPhysicsLinearVelocity(FVector::ZeroVector);
+		//이동전 회전 속도 제거
+		GetMesh()->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
+	}
+
+	ForceNetUpdate();
+
+	UE_LOG(LogTemplateVehicle, Warning, TEXT("%s returned to initial position"), *GetNameSafe(this));
+}
+
+void ACXPawn::SetMovementLocked(bool bLocked)
+{
+	//잠금 여부는 서버에서 결정
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	bMovementLocked = bLocked;
+
+	//서버에서는 OnRep이 자동으로 호출되지 않아 직접 적용
+	ApplyMovementLock();
+
+	ForceNetUpdate();
+}
+
+void ACXPawn::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(ThisClass, bMovementLocked);
+}
+
+void ACXPawn::OnRep_MovementLocked()
+{
+	//클라이언트 차량에도 동일한 설정 적용
+	ApplyMovementLock();
+}
+
+void ACXPawn::ApplyMovementLock()
+{
+	if (!IsValid(ChaosVehicleMovement))
+	{
+		return;
+	}
+
+	//이전에 누르고 있던 가속, 조항 입력 제거
+	ChaosVehicleMovement->SetThrottleInput(0.f);
+	ChaosVehicleMovement->SetSteeringInput(0.f);
+
+	//잠기면 브레이크 유지, 풀리면 브레이크 해제
+	ChaosVehicleMovement->SetBrakeInput(bMovementLocked ? 1.f : 0.f);
+	ChaosVehicleMovement->SetHandbrakeInput(bMovementLocked);
+
+	if (bMovementLocked && IsValid(GetMesh()))
+	{
+		//잠금 직전 남아 있던 이동, 회전 속도 제거
+		GetMesh()->SetPhysicsLinearVelocity(FVector::ZeroVector);
+		GetMesh()->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
+	}
+}
+
+void ACXPawn::BeginPlay()
+{
+	Super::BeginPlay();
+
+	//실제 게임 위치는 서버가 관리
+	if (HasAuthority())
+	{
+		InitialTransform = GetActorTransform();
+	}
+}
+
 void ACXPawn::Steering(const FInputActionValue& Value)
 {
+	// 카운트다운 중에는 차량 조작 무시
+	if (bMovementLocked)
+	{
+		return;
+	}
+
 	// get the input magnitude for steering
 	float SteeringValue = Value.Get<float>();
 
@@ -153,6 +282,12 @@ void ACXPawn::Steering(const FInputActionValue& Value)
 
 void ACXPawn::Throttle(const FInputActionValue& Value)
 {
+	// 카운트다운 중에는 차량 조작 무시
+	if (bMovementLocked)
+	{
+		return;
+	}
+
 	// get the input magnitude for the throttle
 	float ThrottleValue = Value.Get<float>();
 
@@ -162,6 +297,12 @@ void ACXPawn::Throttle(const FInputActionValue& Value)
 
 void ACXPawn::Brake(const FInputActionValue& Value)
 {
+	// 카운트다운 중에는 차량 조작 무시
+	if (bMovementLocked)
+	{
+		return;
+	}
+
 	// get the input magnitude for the brakes
 	float BreakValue = Value.Get<float>();
 
@@ -171,12 +312,24 @@ void ACXPawn::Brake(const FInputActionValue& Value)
 
 void ACXPawn::StartBrake(const FInputActionValue& Value)
 {
+	// 카운트다운 중에는 차량 조작 무시
+	if (bMovementLocked)
+	{
+		return;
+	}
+
 	// call the Blueprint hook for the break lights
 	BrakeLights(true);
 }
 
 void ACXPawn::StopBrake(const FInputActionValue& Value)
 {
+	// 카운트다운 중에는 차량 조작 무시
+	if (bMovementLocked)
+	{
+		return;
+	}
+
 	// call the Blueprint hook for the break lights
 	BrakeLights(false);
 
@@ -186,6 +339,12 @@ void ACXPawn::StopBrake(const FInputActionValue& Value)
 
 void ACXPawn::StartHandbrake(const FInputActionValue& Value)
 {
+	// 카운트다운 중에는 차량 조작 무시
+	if (bMovementLocked)
+	{
+		return;
+	}
+
 	// add the input
 	ChaosVehicleMovement->SetHandbrakeInput(true);
 
@@ -195,6 +354,12 @@ void ACXPawn::StartHandbrake(const FInputActionValue& Value)
 
 void ACXPawn::StopHandbrake(const FInputActionValue& Value)
 {
+	// 카운트다운 중에는 차량 조작 무시
+	if (bMovementLocked)
+	{
+		return;
+	}
+
 	// add the input
 	ChaosVehicleMovement->SetHandbrakeInput(false);
 
@@ -222,6 +387,12 @@ void ACXPawn::ToggleCamera(const FInputActionValue& Value)
 
 void ACXPawn::ResetVehicle(const FInputActionValue& Value)
 {
+	// 카운트다운 중에는 차량 조작 무시
+	if (bMovementLocked)
+	{
+		return;
+	}
+
 	// reset to a location slightly above our current one
 	FVector ResetLocation = GetActorLocation() + FVector(0.0f, 0.0f, 50.0f);
 
@@ -277,7 +448,7 @@ void ACXPawn::CTSAttack_Implementation()
 		if (ACXPawn* CXPawn = Cast<ACXPawn>(Actor))
 		{
 			bHitVehicle = true;
-			UGameplayStatics::ApplyDamage(CXPawn, 1.0f, GetController(), this, nullptr);
+			UGameplayStatics::ApplyDamage(CXPawn, 5.f, GetController(), this, nullptr);
 		}
 	}
 	MulticastHitEffect(Start, End, bHitVehicle, HitResult.ImpactPoint, HitResult.ImpactNormal);

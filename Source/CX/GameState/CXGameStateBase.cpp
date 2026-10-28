@@ -14,14 +14,14 @@ void ACXGameStateBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
   DOREPLIFETIME(ThisClass, Winners);
 }
 
-void ACXGameStateBase::SetGameState(EGameState NewGaemState)
+void ACXGameStateBase::SetGameState(EGameState NewGameState)
 {
   if (!HasAuthority())
   {
     return;
   }
 
-  CurrentGameState = NewGaemState;
+  CurrentGameState = NewGameState;
 }
 
 void ACXGameStateBase::SetRemainingTime(int32 NewRemainingTime)

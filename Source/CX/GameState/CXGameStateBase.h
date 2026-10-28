@@ -24,7 +24,7 @@ class CX_API ACXGameStateBase : public AGameStateBase
 public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	void SetGameState(EGameState NewGaemState);
+	void SetGameState(EGameState NewGameState);
 
 	void SetRemainingTime(int32 NewRemainingTime);
 	int32 GetRemainingTime() const { return RemainingTime; }

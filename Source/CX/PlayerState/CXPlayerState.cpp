@@ -55,6 +55,8 @@ void ACXPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
   DOREPLIFETIME_CONDITION(ThisClass, Coins, COND_OwnerOnly);
   DOREPLIFETIME_CONDITION(ThisClass, BonusMaxSpeed, COND_OwnerOnly);
   DOREPLIFETIME(ThisClass, bReady);
+  DOREPLIFETIME(ThisClass, bNicknameConfirmed);
+  DOREPLIFETIME(ThisClass, bReplayRequested);
 }
 
 void ACXPlayerState::AddCoins(int32 Amount)
@@ -88,6 +90,27 @@ void ACXPlayerState::AddBonusMaxSpeed(float Amount)
   }
 
   BonusMaxSpeed += Amount;
+}
+
+void ACXPlayerState::ResetCoins()
+{
+  if (!HasAuthority())
+  {
+    return;
+  }
+
+  //PlayerState에 저장된 실제 코인값 변경
+  Coins = 0;
+}
+
+void ACXPlayerState::ResetBonusMaxSpeed()
+{
+  if (!HasAuthority())
+  {
+    return;
+  }
+
+  BonusMaxSpeed = 0;
 }
 
 FString ACXPlayerState::GetPlayerStateInfo() const

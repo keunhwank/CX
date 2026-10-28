@@ -6,6 +6,8 @@
 #include "GameFramework/GameModeBase.h"
 #include "CXGameMode.generated.h"
 
+class ACXPlayerController;
+
 UCLASS(MinimalAPI)
 class ACXGameMode : public AGameModeBase
 {
@@ -29,6 +31,8 @@ protected:
 	/** Called after a successful login.  This is the first place it is safe to call replicated functions on the PlayerController. */
 	virtual void PostLogin(APlayerController* NewPlayer);
 
+	virtual void Logout(AController* Exiting) override;
+
 private:
 	bool IsPlayerStartAvailable(const APlayerStart* PlayerStart) const;
 
@@ -47,6 +51,9 @@ public:
 	bool CanChangeReady() const;
 
 	void TryStartGame();
+
+	//서버에서 투표를 저장 하고 전원 동의 여부 확인
+	void RequestReplay(ACXPlayerController* Requester);
 };
 
 

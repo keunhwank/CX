@@ -82,7 +82,7 @@ protected:
 	/** Keeps track of which camera is active */
 	bool bFrontCameraActive = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Coin)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Particle)
 	UParticleSystem* HitParticle;
 
 public:
@@ -105,9 +105,29 @@ public:
 	UFUNCTION(NetMulticast, Unreliable)
 	void MulticastHitEffect(const FVector& TraceStart, const FVector& TraceEnd, bool bHitVehicle, const FVector& ImpactPoint, const FVector& ImpactNormal);
 
+	void ReturnToInitialPosition();
 
+	//서버가 차량 조작 잠금 여부 변경
+	void SetMovementLocked(bool bLocked);
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 protected:
+	FTransform InitialTransform = FTransform::Identity;
+
+	//서버에서 변경한 잠금 상태를 클라이언트에 전달
+	UPROPERTY(ReplicatedUsing = OnRep_MovementLocked)
+	bool bMovementLocked = false;
+
+	//클라이언트가 변경된 잠금 상태를 받으면 실행
+	UFUNCTION()
+	void OnRep_MovementLocked();
+
+	//실제 가속, 브레이크 설정 적용
+	void ApplyMovementLock();
+
+protected:
+	virtual void BeginPlay() override;
 
 	/** Handles steering input */
 	void Steering(const FInputActionValue& Value);

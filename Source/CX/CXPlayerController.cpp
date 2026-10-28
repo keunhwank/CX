@@ -26,9 +26,10 @@ void ACXPlayerController::STCChatLog_Implementation(const TArray<FChatData>& Cha
 
 void ACXPlayerController::CTSChatMessage_Implementation(const FString& Message)
 {
-	UE_LOG(LogTemp, Warning, TEXT("%s"), *Message);
-
 	const FString PlayerName = PlayerState->GetPlayerName();
+
+	UE_LOG(LogTemp, Warning, TEXT("%s: %s"), *PlayerName, *Message);
+
 	if (UChatSubsystem* ChatSubsystem = GetWorld()->GetSubsystem<UChatSubsystem>())
 	{
 		ChatSubsystem->AddChatMessage(PlayerName, Message);
@@ -66,6 +67,12 @@ void ACXPlayerController::CTSSetReady_Implementation(bool bNewReady)
 		return;
 	}
 
+	//닉네임 지정하기 전에는 Ready 요청 거절
+	if (!CXPlayerState->bNicknameConfirmed)
+	{
+		return;
+	}
+
 	CXPlayerState->bReady = bNewReady;
 
 	UE_LOG(LogTemp, Warning, TEXT("%s Ready: %s"),*CXPlayerState->GetPlayerName(),bNewReady ? TEXT("true") : TEXT("false"));
@@ -75,12 +82,69 @@ void ACXPlayerController::CTSSetReady_Implementation(bool bNewReady)
 	
 }
 
+void ACXPlayerController::CTSSubmitNickname_Implementation(const FString& Nickname)
+{
+	ACXPlayerState* PS = GetPlayerState<ACXPlayerState>();
+
+	if (!IsValid(PS))
+	{
+		return;
+	}
+
+	//한번 정하면 다시 변경 안함
+	if (PS->bNicknameConfirmed)
+	{
+		return;
+	}
+
+	//이름 앞뒤 공백 제거
+	const FString TrimmedNickname = Nickname.TrimStartAndEnd();
+
+	//공백만 입력했거나 12자 이상 초과하면 거절
+	if (TrimmedNickname.IsEmpty() || TrimmedNickname.Len() > 12)
+	{
+		return;
+	}
+
+	//서버에서 기본 PlayerName에 닉네임 저장
+	PS->SetPlayerName(TrimmedNickname);
+
+	//서버가 정상적으로 저장하면 입력 완료처리
+	PS->bNicknameConfirmed = true;
+
+	UE_LOG(LogTemp, Warning, TEXT("Nickname confirmed: %s"), *PS->GetPlayerName());
+}
+
+void ACXPlayerController::CTSRequestReplay_Implementation()
+{
+	ACXGameMode* GM =	GetWorld()->GetAuthGameMode<ACXGameMode>();
+
+	if (IsValid(GM))
+	{
+		// 서버에서 이 Controller 자신의 투표만 처리
+		GM->RequestReplay(this);
+	}
+}
+
+void ACXPlayerController::ToggleMouseForUI()
+{
+	if (bShowMouseCursor)
+	{
+		HideMouseForUI();
+	}
+	else
+	{
+		ShowMouseForUI();
+	}
+}
+
 void ACXPlayerController::ShowMouseForUI()
 {
 	if (!IsLocalController())
 	{
 		return;
 	}
+	UE_LOG(LogTemp, Warning, TEXT("ShowMouseForUI"));
 
 	bShowMouseCursor = true;
 
@@ -97,6 +161,7 @@ void ACXPlayerController::HideMouseForUI()
 	{
 		return;
 	}
+	UE_LOG(LogTemp, Warning, TEXT("HideMouseForUI"));
 
 	bShowMouseCursor = false;
 
@@ -120,6 +185,16 @@ void ACXPlayerController::BeginPlay()
 
 	VehicleUI->AddToViewport();
 
+	bShowMouseCursor = true;
+
+	//닉네임 입력 중에는 UI만 조작
+	FInputModeUIOnly InputMode;
+	
+	InputMode.SetLockMouseToViewportBehavior(
+		EMouseLockMode::DoNotLock);
+
+	SetInputMode(InputMode);
+
 	if (UChatSubsystem* ChatSubsystem = GetWorld()->GetSubsystem<UChatSubsystem>())
 	{
 		const TArray<FChatData>& ChatLog = ChatSubsystem->GetChatLog();
@@ -130,7 +205,6 @@ void ACXPlayerController::BeginPlay()
 		}
 
 		ChatSubsystem->ClearChatLog();
-		HideMouseForUI();
 	}
 }
 
@@ -140,11 +214,7 @@ void ACXPlayerController::SetupInputComponent()
 	
 	InputComponent->BindKey(
 		EKeys::Tab, IE_Pressed,
-		this, &ThisClass::ShowMouseForUI);
-
-	InputComponent->BindKey(
-		EKeys::Tab, IE_Released,
-		this, &ThisClass::HideMouseForUI);
+		this, &ThisClass::ToggleMouseForUI);
 	
 	// get the enhanced input subsystem
 	if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
@@ -181,6 +251,17 @@ void ACXPlayerController::Tick(float Delta)
 		if (const ACXGameStateBase* CXGameState = GetWorld()->GetGameState<ACXGameStateBase>())
 		{
 			VehicleUI->UpdateReminingTime(CXGameState->GetRemainingTime());
+			//결과 표시
+			VehicleUI->UpdateGameResult(CXGameState);
+
+			//결과 화면 버튼과 투표 상태 갱신
+			VehicleUI->UpdateReplayUI(CXGameState);
+		}
+
+		if (IsLocalController() && IsValid(VehicleUI))
+		{
+			//복제된 PlayerState의 닉네임 확정 상태 확인
+			VehicleUI->UpdateNicknameState();
 		}
 	}
 }

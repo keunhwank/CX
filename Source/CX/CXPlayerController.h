@@ -34,9 +34,18 @@ protected:
 	void STCChatMessage(const FString& Sender, const FString& Message);
 
 public:
+	//내 Replay 투표를 서버에 요청
+	UFUNCTION(Server, Reliable)
+	void CTSRequestReplay();
+
 	UFUNCTION(Server, Reliable)
 	void CTSSetReady(bool bNewReady);
 
+	//클라이언트가 입력한 닉네임을 서버로 전송
+	UFUNCTION(Server, Reliable)
+	void CTSSubmitNickname(const FString& Nickname);
+
+	void ToggleMouseForUI();
 	void ShowMouseForUI();
 	void HideMouseForUI();
 
